@@ -2,14 +2,8 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
 import { contextBridge, ipcRenderer } from 'electron'
+import { IpcSignatures } from './shared/models/IpcSignatures'
 
-contextBridge.exposeInMainWorld('versions', {
-  node: () => process.versions.node,
-  chrome: () => process.versions.chrome,
-  electron: () => process.versions.electron,
-  // we can also expose variables, not just functions
-})
-
-contextBridge.exposeInMainWorld('messages', {
-  ping: () => ipcRenderer.invoke('ping'),
+contextBridge.exposeInMainWorld('file', {
+  selectDirectory: () => ipcRenderer.invoke(IpcSignatures.selectDirectory),
 })

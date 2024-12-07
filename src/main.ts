@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, session } from 'electron'
 import path from 'path'
 import started from 'electron-squirrel-startup'
+import { registerIpcHandlers } from './main/registerIpcHandlers'
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -14,6 +15,7 @@ const createWindow = () => {
     height: 600,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      devTools: true,
     },
   })
 
@@ -24,8 +26,9 @@ const createWindow = () => {
     mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
   }
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools()
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools()
+  }
 }
 
 // This method will be called when Electron has finished
@@ -34,7 +37,17 @@ const createWindow = () => {
 app.whenReady().then(() => {
   createWindow()
 
-  ipcMain.handle('ping', () => 'pong')
+  // Define CSP
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': ["default-src 'self' 'unsafe-inline'"],
+      },
+    })
+  })
+
+  registerIpcHandlers()
 
   app.on('activate', () => {
     // On OS X it's common to re-create a window in the app when the
@@ -53,6 +66,3 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.
