@@ -2,8 +2,13 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
 import { contextBridge, ipcRenderer } from 'electron'
-import { IpcSignatures } from './shared/models/IpcSignatures'
+import { IpcIdentifiers } from './shared/models/IpcSignatures'
 
 contextBridge.exposeInMainWorld('file', {
-  selectDirectory: () => ipcRenderer.invoke(IpcSignatures.selectDirectory),
+  selectDirectory: () => ipcRenderer.invoke(IpcIdentifiers.selectDirectory),
+})
+
+contextBridge.exposeInMainWorld('fvtt', {
+  getExternalAssets: (adventureModulePath: string) =>
+    ipcRenderer.invoke(IpcIdentifiers.getExternalAssets, { adventureModulePath }),
 })

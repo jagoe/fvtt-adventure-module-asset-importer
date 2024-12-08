@@ -1,3 +1,4 @@
-export enum IpcSignatures {
+export enum IpcIdentifiers {
   selectDirectory = 'selectDirectory',
+  getExternalAssets = 'getExternalAssets',
 }

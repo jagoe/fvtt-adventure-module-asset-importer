@@ -1,19 +1,14 @@
-export type Versions = {
-  node: () => string
-  chrome: () => string
-  electron: () => string
-}
-
-export type Messages = {
-  ping: () => string
-}
+import { Result, AdventureModuleAssetsResult } from './shared/models'
 
 export type File = {
   selectDirectory: () => Promise<string | null>
 }
 
+export type FVTT = {
+  getExternalAssets: (adventureModulePath: string) => Promise<AdventureModuleAssetsResult>
+}
+
 declare global {
-  const versions: Versions
-  const messages: Messages
   const file: File
+  const fvtt: FVTT
 }
