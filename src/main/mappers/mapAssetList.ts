@@ -7,14 +7,14 @@ export const mapAssetList = (assets: AdventureModuleAssets): AssetList => {
 
   return packAssets.reduce((result, current) => {
     Object.entries(current).forEach(([entity, assets]) => {
-      let entityList = result.find((entry) => entry.type === entity)
+      let entityList = result.find((entry) => entry.entity === entity)
 
       if (!entityList) {
-        entityList = { type: entity, assets: [] }
+        entityList = { entity, assets: [] }
         result.push(entityList)
       }
 
-      entityList.assets = unique([...entityList.assets, ...assets])
+      entityList.assets = unique([...entityList.assets, ...assets]) // TODO: Probably not unique
     })
 
     return result

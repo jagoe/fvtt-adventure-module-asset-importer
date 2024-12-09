@@ -5,7 +5,8 @@ export type File = {
 }
 
 export type FVTT = {
-  getExternalAssets: (adventureModulePath: string) => Promise<AssetListResult>
+  getExternalAssets: (options: { adventureModulePath: string; newModuleName: string }) => Promise<AssetListResult>
+  importExternalAssets: () => Promise<Result<void>>
 }
 
 declare global {

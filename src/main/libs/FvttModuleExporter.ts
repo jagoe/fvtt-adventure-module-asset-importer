@@ -1,17 +1,18 @@
-import { basename, extname, join, resolve } from 'node:path'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { basename, dirname, extname, join, resolve } from 'node:path'
+import { copyFile, mkdir, mkdtemp, rm, cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import {
   AdventureModuleAssets,
   AdventureModuleAssetsResult,
+  AssetInfo,
   EntityModuleAssets,
   PackModuleAssets,
   PackModuleAssetsResult,
   Result,
 } from '@shared/models'
-import { tryReadDir, tryReadJsonFile } from './file'
+import { tryReadDir, tryReadJsonFile, tryReadTextFile, tryWriteTextFile } from './file'
 import { unique } from './array/unique'
-import { extractPack } from '@foundryvtt/foundryvtt-cli'
+import { compilePack, extractPack } from '@foundryvtt/foundryvtt-cli'
 
 enum State {
   Destroyed,
@@ -27,12 +28,18 @@ export class FvttModuleAssetExporter {
   private moduleAssetPattern: RegExp
 
   private dataRoot: string
+  private moduleRoot: string
   private adventureModulePath: string
   private adventureModuleName: string
+  private newModulePath: string
+  private newModuleName: string
   private tmpPath: string
   private packsPath: string
+  private newPacksPath: string
 
   private packs: string[]
+  private moduleAssets: AdventureModuleAssets
+  private assetMap: Record<string, AssetInfo>
 
   constructor() {}
 
@@ -40,9 +47,11 @@ export class FvttModuleAssetExporter {
     if (!this.Instance) {
       this.Instance = new FvttModuleAssetExporter()
     }
+
+    return this.Instance
   }
 
-  async init(adventureModulePath: string): Promise<Result<void>> {
+  async init(adventureModulePath: string, newModuleName: string): Promise<Result<void>> {
     if (!adventureModulePath) {
       return { error: { message: 'Please provide a module path' } }
     }
@@ -56,19 +65,28 @@ export class FvttModuleAssetExporter {
     }
 
     this.adventureModulePath = adventureModulePath
-    this.dataRoot = resolve(this.adventureModulePath, '..', '..')
+    this.moduleRoot = resolve(this.adventureModulePath, '..')
+    this.dataRoot = resolve(this.moduleRoot, '..')
     this.adventureModuleName = basename(this.adventureModulePath)
     this.moduleAssetPattern = new RegExp(`"(modules/(?!${this.adventureModuleName}).*?)"`, 'g')
-    this.tmpPath = await mkdtemp(join(tmpdir(), 'fvtt-asset-exporter_'))
     this.packsPath = join(this.adventureModulePath, 'packs')
+    this.newModulePath = newModuleName ? join(this.moduleRoot, newModuleName) : null
+    this.newModuleName = newModuleName ? newModuleName : null
+    this.newPacksPath = newModuleName ? join(this.newModulePath, 'packs') : null
+    this.tmpPath = await mkdtemp(join(tmpdir(), 'fvtt-asset-exporter_'))
 
+    this.packs = []
     this.state = State.Initialized
 
     console.debug(`Initializing exporter:
   dataRoot: ${this.dataRoot}
   adventureModuleName: ${this.adventureModuleName}
   tmpPath: ${this.tmpPath}
-  packsPath: ${this.packsPath}`)
+  packsPath: ${this.packsPath}
+  newModulePath: ${this.newModulePath}
+  newModuleName: ${this.newModuleName}
+  newPacksPath: ${this.newPacksPath}
+`)
 
     return {}
   }
@@ -107,7 +125,8 @@ export class FvttModuleAssetExporter {
       return { error: { message: 'Please extract the module before trying to list its external assets.' } }
     }
 
-    const moduleAssets: AdventureModuleAssets = {}
+    this.moduleAssets = {}
+    this.assetMap = {}
 
     for (const pack of this.packs) {
       const { tmpPackPath } = this.getPackPaths(pack)
@@ -117,10 +136,28 @@ export class FvttModuleAssetExporter {
       }
 
       console.debug(`Found external assets for "${pack}":`, packModuleAssets)
-      moduleAssets[pack] = packModuleAssets
+      this.moduleAssets[pack] = packModuleAssets
     }
 
-    return { assets: moduleAssets }
+    return { assets: this.moduleAssets }
+  }
+
+  async importExternalAssets(): Promise<Result<void>> {
+    if (this.newModulePath) {
+      await cp(this.adventureModulePath, this.newModulePath, { recursive: true })
+    }
+
+    const copying = this.copyExternalAssetsToAdventureModule()
+    const updating = this.updateAssetReferences()
+
+    const result = await Promise.all([copying, updating])
+
+    const errors = result.flatMap((process) => process.map((result) => result.error)).filter((error) => error)
+    if (errors.length) {
+      return { error: { message: 'Expected error(s) during the import.', details: errors } }
+    }
+
+    return {}
   }
 
   private async findExternalAssetsForPack(packPath: string): Promise<PackModuleAssetsResult> {
@@ -137,18 +174,28 @@ export class FvttModuleAssetExporter {
       }
 
       const filePath = join(packPath, file)
-      const json = await tryReadJsonFile(filePath)
+      const { error, value: json } = await tryReadJsonFile(filePath)
+      if (error) {
+        return { error }
+      }
+
       const entityModuleAssets: EntityModuleAssets = {}
 
       console.debug(`Filtering for external assets in "${filePath}"`)
 
-      Object.entries(json).forEach(([key, value]) => {
+      Object.entries(json).forEach(([entityType, value]) => {
         if (Array.isArray(value)) {
           const arrayJson = JSON.stringify(value)
           const entityAssets = [...arrayJson.matchAll(this.moduleAssetPattern)].map((match) => match[1])
 
+          this.buildAssetMap(entityType, entityAssets)
+
           if (entityAssets.length) {
-            entityModuleAssets[key] = unique(entityAssets)
+            entityModuleAssets[entityType] = unique(entityAssets).map((asset) => ({
+              entityType,
+              originalPath: asset,
+              internalPath: this.assetMap[asset].internalPath,
+            }))
           }
         }
       })
@@ -157,6 +204,73 @@ export class FvttModuleAssetExporter {
     }
 
     return { assets: packModuleAssets }
+  }
+
+  private buildAssetMap(entityType: string, assets: string[]) {
+    assets.forEach((asset) => {
+      if (this.assetMap[asset]) {
+        return
+      }
+
+      this.assetMap[asset] = {
+        entityType,
+        originalPath: asset,
+        internalPath: this.getInternalAssetPath(entityType, asset),
+      }
+    })
+  }
+
+  private async copyExternalAssetsToAdventureModule(): Promise<Result<void>[]> {
+    return Promise.all(
+      Object.values(this.assetMap).map(async (assetInfo) => {
+        try {
+          const originalPath = join(this.dataRoot, assetInfo.originalPath)
+          const exportPath = join(this.dataRoot, assetInfo.internalPath)
+          const assetDirectory = dirname(exportPath)
+          await mkdir(assetDirectory, { recursive: true })
+          console.debug(`Copying '${originalPath}' to '${exportPath}'`)
+          await copyFile(originalPath, exportPath)
+
+          return {}
+        } catch (err) {
+          return { error: { message: 'Unexpected error while copying assets', detail: err } }
+        }
+      }),
+    )
+  }
+
+  private async updateAssetReferences(): Promise<Result<void>[]> {
+    return Promise.all(
+      Object.entries(this.moduleAssets).flatMap(([pack, files]) =>
+        Object.entries(files).map(async ([file, entities]) => {
+          const filePath = join(this.tmpPath, pack, file)
+          let { error: readError, value: json } = await tryReadTextFile(filePath)
+          if (readError) {
+            return { error: readError }
+          }
+
+          console.debug(`Replacing assets in pack ${pack}`)
+
+          Object.values(entities)
+            .flatMap((assets) => assets)
+            .forEach((asset) => {
+              console.debug(`  Replacing '${asset.originalPath}' with '${asset.internalPath}'`)
+              json = json.replaceAll(asset.originalPath, asset.internalPath)
+            })
+
+          const { error: writeError } = await tryWriteTextFile(filePath, json)
+          if (writeError) {
+            return { error: writeError }
+          }
+
+          const packPath = join(this.newPacksPath, pack)
+          const tmpPackPath = join(this.tmpPath, pack)
+          await compilePack(tmpPackPath, packPath)
+
+          return {}
+        }),
+      ),
+    )
   }
 
   async destroy() {
@@ -174,5 +288,22 @@ export class FvttModuleAssetExporter {
       originalPackPath: join(this.packsPath, pack),
       tmpPackPath: join(this.tmpPath, pack),
     }
+  }
+
+  private getInternalAssetPath(entityType: string, originalPath: string) {
+    return join(
+      'modules',
+      this.newModuleName || this.adventureModuleName,
+      'assets',
+      entityType,
+      this.getExportedAssetName(originalPath),
+    )
+  }
+
+  private static readonly moduleMatchPattern = /^modules\/(.*?)\/.*?$/
+  private getExportedAssetName(assetPath: string) {
+    const moduleNameMatch = assetPath.match(FvttModuleAssetExporter.moduleMatchPattern)
+    const moduleName = moduleNameMatch ? moduleNameMatch[1] : ''
+    return `${moduleName}_${basename(assetPath)}`
   }
 }

@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('file', {
 })
 
 contextBridge.exposeInMainWorld('fvtt', {
-  getExternalAssets: (adventureModulePath: string) =>
-    ipcRenderer.invoke(IpcIdentifiers.getExternalAssets, { adventureModulePath }),
+  getExternalAssets: (options: { adventureModulePath: string; newModuleName: string }) =>
+    ipcRenderer.invoke(IpcIdentifiers.getExternalAssets, options),
+  importExternalAssets: () => ipcRenderer.invoke(IpcIdentifiers.importExternalAssets),
 })

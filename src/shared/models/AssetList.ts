@@ -1,8 +1,9 @@
+import { AssetInfo } from './AssetInfo'
 import { Result } from './Result'
 
 export type AssetList = {
-  type: string
-  assets: string[]
+  entity: string
+  assets: AssetInfo[]
 }[]
 
 export type AssetListResult = Result<AssetList, 'assets'>

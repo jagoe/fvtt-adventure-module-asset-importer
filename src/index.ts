@@ -6,8 +6,6 @@ import { registerIpcHandlers } from './main/registerIpcHandlers'
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string
 
-console.log(100, process.env)
-
 const devMode = process.env.WEBPACK_SERVE === 'true'
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
