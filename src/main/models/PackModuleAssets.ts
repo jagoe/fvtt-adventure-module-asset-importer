@@ -1,5 +1,5 @@
 import { EntityModuleAssets } from './EntityModuleAssets'
-import { Result } from './Result'
+import { Result } from '../../shared/models/Result'
 
 export type PackModuleAssets = {
   [jsonFile: string]: EntityModuleAssets

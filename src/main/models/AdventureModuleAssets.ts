@@ -1,4 +1,4 @@
-import { Result } from './Result'
+import { Result } from '../../shared/models/Result'
 import { PackModuleAssets } from './PackModuleAssets'
 
 export type AdventureModuleAssets = {

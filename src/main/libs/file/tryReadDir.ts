@@ -1,4 +1,4 @@
-import { Result } from '@/shared/models/Result'
+import { Result } from '@shared/models/Result'
 import { readdir } from 'node:fs/promises'
 
 export const tryReadDir = async (path: string): Promise<Result<string[]>> => {

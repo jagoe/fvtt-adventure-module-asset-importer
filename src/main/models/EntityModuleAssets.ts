@@ -1,4 +1,4 @@
-import { Result } from './Result'
+import { Result } from '../../shared/models/Result'
 
 export type EntityModuleAssets = {
   [entity: string]: string[]

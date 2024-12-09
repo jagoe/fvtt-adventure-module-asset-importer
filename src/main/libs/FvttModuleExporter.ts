@@ -8,10 +8,10 @@ import {
   PackModuleAssets,
   PackModuleAssetsResult,
   Result,
-} from '@/shared/models'
+} from '@shared/models'
 import { tryReadDir, tryReadJsonFile } from './file'
 import { unique } from './array/unique'
-import { extractPack } from './fvtt/package'
+import { extractPack } from '@foundryvtt/foundryvtt-cli'
 
 enum State {
   Destroyed,
@@ -116,17 +116,17 @@ export class FvttModuleAssetExporter {
         return { error }
       }
 
+      console.debug(`Found external assets for "${pack}":`, packModuleAssets)
       moduleAssets[pack] = packModuleAssets
     }
 
     return { assets: moduleAssets }
   }
 
-  private async findExternalAssetsForPack(pack: string): Promise<PackModuleAssetsResult> {
+  private async findExternalAssetsForPack(packPath: string): Promise<PackModuleAssetsResult> {
     const packModuleAssets: PackModuleAssets = {}
-    const { tmpPackPath } = this.getPackPaths(pack)
 
-    const { error, value: packFiles } = await tryReadDir(tmpPackPath)
+    const { error, value: packFiles } = await tryReadDir(packPath)
     if (error) {
       return { error }
     }
@@ -136,9 +136,11 @@ export class FvttModuleAssetExporter {
         continue
       }
 
-      const filePath = join(tmpPackPath, file)
+      const filePath = join(packPath, file)
       const json = await tryReadJsonFile(filePath)
       const entityModuleAssets: EntityModuleAssets = {}
+
+      console.debug(`Filtering for external assets in "${filePath}"`)
 
       Object.entries(json).forEach(([key, value]) => {
         if (Array.isArray(value)) {

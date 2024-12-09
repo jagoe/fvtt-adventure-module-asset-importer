@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client'
-import Exporter from './Exporter'
+import Exporter from './components/Exporter'
 
 const root = createRoot(document.body)
 

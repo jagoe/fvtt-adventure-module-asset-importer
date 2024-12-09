@@ -1,4 +1,4 @@
-import { Result } from '@/shared/models/Result'
+import { Result } from '@shared/models/Result'
 import { readFile } from 'node:fs/promises'
 
 export const tryReadJsonFile = async (path: string): Promise<Result<unknown>> => {

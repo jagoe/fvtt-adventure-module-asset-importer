@@ -1,11 +1,11 @@
-import { Result, AdventureModuleAssetsResult } from './shared/models'
+import { Result, AssetListResult } from './shared/models'
 
 export type File = {
   selectDirectory: () => Promise<string | null>
 }
 
 export type FVTT = {
-  getExternalAssets: (adventureModulePath: string) => Promise<AdventureModuleAssetsResult>
+  getExternalAssets: (adventureModulePath: string) => Promise<AssetListResult>
 }
 
 declare global {
