@@ -1,11 +1,11 @@
 import { createRoot } from 'react-dom/client'
-import Exporter from './components/Exporter'
+import Importer from './components/Importer'
 
 const root = createRoot(document.body)
 
 root.render(
   <>
-    <h2>FVTT Module Asset Exporter</h2>
-    <Exporter />
+    <h2>FVTT Module Asset Importer</h2>
+    <Importer />
   </>,
 )

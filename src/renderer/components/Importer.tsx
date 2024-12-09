@@ -2,7 +2,7 @@ import { AssetList } from '@shared/models/AssetList'
 import { Error } from '@shared/models/Error'
 import { useCallback, useState } from 'react'
 
-export default function Exporter() {
+export default function Importer() {
   const [adventureModulePath, setAdventureModulePath] = useState('')
   const [assetList, setAssetList] = useState<AssetList>(null)
   const [saveToNewModule, setSaveToNewModule] = useState(false)

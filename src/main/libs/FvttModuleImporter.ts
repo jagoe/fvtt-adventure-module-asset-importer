@@ -21,8 +21,8 @@ enum State {
   Extracted,
 }
 
-export class FvttModuleAssetExporter {
-  static Instance: FvttModuleAssetExporter
+export class FvttModuleAssetImporter {
+  static Instance: FvttModuleAssetImporter
 
   private state: State = State.Created
   private moduleAssetPattern: RegExp
@@ -45,7 +45,7 @@ export class FvttModuleAssetExporter {
 
   static create() {
     if (!this.Instance) {
-      this.Instance = new FvttModuleAssetExporter()
+      this.Instance = new FvttModuleAssetImporter()
     }
 
     return this.Instance
@@ -73,12 +73,12 @@ export class FvttModuleAssetExporter {
     this.newModulePath = newModuleName ? join(this.moduleRoot, newModuleName) : null
     this.newModuleName = newModuleName ? newModuleName : null
     this.newPacksPath = newModuleName ? join(this.newModulePath, 'packs') : null
-    this.tmpPath = await mkdtemp(join(tmpdir(), 'fvtt-asset-exporter_'))
+    this.tmpPath = await mkdtemp(join(tmpdir(), 'fvtt-asset-importer_'))
 
     this.packs = []
     this.state = State.Initialized
 
-    console.debug(`Initializing exporter:
+    console.debug(`Initializing importer:
   dataRoot: ${this.dataRoot}
   adventureModuleName: ${this.adventureModuleName}
   tmpPath: ${this.tmpPath}
@@ -225,11 +225,11 @@ export class FvttModuleAssetExporter {
       Object.values(this.assetMap).map(async (assetInfo) => {
         try {
           const originalPath = join(this.dataRoot, assetInfo.originalPath)
-          const exportPath = join(this.dataRoot, assetInfo.internalPath)
-          const assetDirectory = dirname(exportPath)
+          const importPath = join(this.dataRoot, assetInfo.internalPath)
+          const assetDirectory = dirname(importPath)
           await mkdir(assetDirectory, { recursive: true })
-          console.debug(`Copying '${originalPath}' to '${exportPath}'`)
-          await copyFile(originalPath, exportPath)
+          console.debug(`Copying '${originalPath}' to '${importPath}'`)
+          await copyFile(originalPath, importPath)
 
           return {}
         } catch (err) {
@@ -296,13 +296,13 @@ export class FvttModuleAssetExporter {
       this.newModuleName || this.adventureModuleName,
       'assets',
       entityType,
-      this.getExportedAssetName(originalPath),
+      this.getInternalAssetName(originalPath),
     )
   }
 
   private static readonly moduleMatchPattern = /^modules\/(.*?)\/.*?$/
-  private getExportedAssetName(assetPath: string) {
-    const moduleNameMatch = assetPath.match(FvttModuleAssetExporter.moduleMatchPattern)
+  private getInternalAssetName(assetPath: string) {
+    const moduleNameMatch = assetPath.match(FvttModuleAssetImporter.moduleMatchPattern)
     const moduleName = moduleNameMatch ? moduleNameMatch[1] : ''
     return `${moduleName}_${basename(assetPath)}`
   }

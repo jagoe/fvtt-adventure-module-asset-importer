@@ -1,6 +1,6 @@
 {
-  "name": "fvtt-adventure-module-asset-exporter",
-  "productName": "fvtt-adventure-module-asset-exporter",
+  "name": "fvtt-adventure-module-asset-importer",
+  "productName": "fvtt-adventure-module-asset-importer",
   "version": "1.0.0",
   "description": "My Electron application description",
   "main": ".webpack/main",
