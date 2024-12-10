@@ -1,30 +1,16 @@
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { copyFile, mkdir, mkdtemp, rm, cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import {
-  AdventureModuleAssets,
-  AdventureModuleAssetsResult,
-  AssetInfo,
-  EntityModuleAssets,
-  PackModuleAssets,
-  PackModuleAssetsResult,
-  Result,
-} from '@shared/models'
+import { AssetInfo, AssetList, Fail, ImportDetails, ImporterSettings, Ok, Result } from '@shared/models'
 import { tryReadDir, tryReadJsonFile, tryReadTextFile, tryWriteTextFile } from './file'
 import { unique } from './array/unique'
 import { compilePack, extractPack } from '@foundryvtt/foundryvtt-cli'
-
-enum State {
-  Destroyed,
-  Created,
-  Initialized,
-  Extracted,
-}
+import { AdventureModuleAssets, EntityModuleAssets as EntityAssets, PackModuleAssets as PackAssets } from '@main/models'
+import { mapAssetList } from '@main/mappers/mapAssetList'
 
 export class FvttModuleAssetImporter {
-  static Instance: FvttModuleAssetImporter
+  private static readonly _instance: FvttModuleAssetImporter = new FvttModuleAssetImporter()
 
-  private state: State = State.Created
   private moduleAssetPattern: RegExp
 
   private dataRoot: string
@@ -41,28 +27,20 @@ export class FvttModuleAssetImporter {
   private moduleAssets: AdventureModuleAssets
   private assetMap: Record<string, AssetInfo>
 
-  constructor() {}
-
-  static create() {
-    if (!this.Instance) {
-      this.Instance = new FvttModuleAssetImporter()
-    }
-
-    return this.Instance
+  static get Instance() {
+    return this._instance
   }
 
-  async init(adventureModulePath: string, newModuleName: string): Promise<Result<void>> {
+  async initialize(adventureModulePath: string): Promise<Result<never>> {
     if (!adventureModulePath) {
-      return { error: { message: 'Please provide a module path' } }
+      return Fail('Please provide a module path')
     }
 
     if (adventureModulePath === this.adventureModulePath) {
-      return {}
+      return Ok()
     }
 
-    if (this.state > State.Created) {
-      this.destroy()
-    }
+    this.destroyOldTmpDir()
 
     this.adventureModulePath = adventureModulePath
     this.moduleRoot = resolve(this.adventureModulePath, '..')
@@ -70,39 +48,90 @@ export class FvttModuleAssetImporter {
     this.adventureModuleName = basename(this.adventureModulePath)
     this.moduleAssetPattern = new RegExp(`"(modules/(?!${this.adventureModuleName}).*?)"`, 'g')
     this.packsPath = join(this.adventureModulePath, 'packs')
-    this.newModulePath = newModuleName ? join(this.moduleRoot, newModuleName) : null
-    this.newModuleName = newModuleName ? newModuleName : null
-    this.newPacksPath = newModuleName ? join(this.newModulePath, 'packs') : null
+    this.newModulePath = null
+    this.newModuleName = null
+    this.newPacksPath = null
     this.tmpPath = await mkdtemp(join(tmpdir(), 'fvtt-asset-importer_'))
 
     this.packs = []
-    this.state = State.Initialized
+    this.moduleAssets = null
+    this.assetMap = null
+
+    await this.extractModule()
 
     console.debug(`Initializing importer:
   dataRoot: ${this.dataRoot}
   adventureModuleName: ${this.adventureModuleName}
   tmpPath: ${this.tmpPath}
   packsPath: ${this.packsPath}
+`)
+
+    return Ok()
+  }
+
+  configure(settings: ImporterSettings): Result<never> {
+    const { saveToNewModule, newModuleName } = settings
+
+    if (saveToNewModule) {
+      if (!newModuleName) {
+        return Fail('Please provide a module name or uncheck the flag to create a new module')
+      }
+
+      this.newModulePath = join(this.moduleRoot, newModuleName)
+      this.newModuleName = newModuleName
+      this.newPacksPath = join(this.newModulePath, 'packs')
+
+      console.debug(`Updating importer settings:
   newModulePath: ${this.newModulePath}
   newModuleName: ${this.newModuleName}
   newPacksPath: ${this.newPacksPath}
 `)
-
-    return {}
+    }
   }
 
-  async extractModule(): Promise<Result<never>> {
-    if (this.state < State.Initialized) {
-      return { error: { message: 'Please run the initialize method before trying to extract the module.' } }
+  async getExternalAssets(): Promise<Result<AssetList>> {
+    if (!this.moduleAssets) {
+      const { error } = await this.parseExternalAssets()
+      if (error) {
+        Fail(error)
+      }
     }
 
-    if (this.state >= State.Extracted) {
-      return {}
+    return Ok(mapAssetList(this.moduleAssets))
+  }
+
+  async importExternalAssets(): Promise<Result<ImportDetails[]>> {
+    if (!this.moduleAssets) {
+      const { error } = await this.parseExternalAssets()
+      if (error) {
+        Fail(error)
+      }
     }
 
+    if (this.newModulePath) {
+      console.debug(`Copying "${this.adventureModulePath}" into "${this.newModulePath}"`)
+      await cp(this.adventureModulePath, this.newModulePath, { recursive: true })
+    }
+
+    const copying = this.copyExternalAssetsToAdventureModule()
+    const updating = this.updateAssetReferences()
+
+    const result = await Promise.all([copying, updating])
+
+    const errors = result.flatMap((process) => process.map((result) => result.error)).filter((error) => error)
+    if (errors.length) {
+      return Fail('Expected error(s) during the import.', errors)
+    }
+
+    const importDetails = result[0].map((r) => r.value)
+
+    return Ok(importDetails)
+  }
+
+  private async extractModule(): Promise<Result<never>> {
     const { error, value: packs } = await tryReadDir(this.packsPath)
     if (error) {
-      return { error }
+      return Fail(error)
     }
 
     this.packs = packs
@@ -115,57 +144,33 @@ export class FvttModuleAssetImporter {
       await extractPack(originalPackPath, tmpPackPath)
     }
 
-    this.state = State.Extracted
-
-    return {}
+    return Ok()
   }
 
-  async findExternalAssets(): Promise<AdventureModuleAssetsResult> {
-    if (this.state < State.Extracted) {
-      return { error: { message: 'Please extract the module before trying to list its external assets.' } }
-    }
-
+  private async parseExternalAssets(): Promise<Result<never>> {
     this.moduleAssets = {}
     this.assetMap = {}
 
     for (const pack of this.packs) {
       const { tmpPackPath } = this.getPackPaths(pack)
-      const { error, assets: packModuleAssets } = await this.findExternalAssetsForPack(tmpPackPath)
+      const { error, value: packModuleAssets } = await this.findExternalAssetsForPack(tmpPackPath)
       if (error) {
-        return { error }
+        return Fail(error)
       }
 
       console.debug(`Found external assets for "${pack}":`, packModuleAssets)
       this.moduleAssets[pack] = packModuleAssets
     }
 
-    return { assets: this.moduleAssets }
+    return Ok()
   }
 
-  async importExternalAssets(): Promise<Result<void>> {
-    if (this.newModulePath) {
-      await cp(this.adventureModulePath, this.newModulePath, { recursive: true })
-    }
-
-    const copying = this.copyExternalAssetsToAdventureModule()
-    const updating = this.updateAssetReferences()
-
-    const result = await Promise.all([copying, updating])
-
-    const errors = result.flatMap((process) => process.map((result) => result.error)).filter((error) => error)
-    if (errors.length) {
-      return { error: { message: 'Expected error(s) during the import.', details: errors } }
-    }
-
-    return {}
-  }
-
-  private async findExternalAssetsForPack(packPath: string): Promise<PackModuleAssetsResult> {
-    const packModuleAssets: PackModuleAssets = {}
+  private async findExternalAssetsForPack(packPath: string): Promise<Result<PackAssets>> {
+    const packModuleAssets: PackAssets = {}
 
     const { error, value: packFiles } = await tryReadDir(packPath)
     if (error) {
-      return { error }
+      return Fail(error)
     }
 
     for await (const file of packFiles) {
@@ -176,10 +181,10 @@ export class FvttModuleAssetImporter {
       const filePath = join(packPath, file)
       const { error, value: json } = await tryReadJsonFile(filePath)
       if (error) {
-        return { error }
+        return Fail(error)
       }
 
-      const entityModuleAssets: EntityModuleAssets = {}
+      const entityModuleAssets: EntityAssets = {}
 
       console.debug(`Filtering for external assets in "${filePath}"`)
 
@@ -203,7 +208,7 @@ export class FvttModuleAssetImporter {
       packModuleAssets[file] = entityModuleAssets
     }
 
-    return { assets: packModuleAssets }
+    return Ok(packModuleAssets)
   }
 
   private buildAssetMap(entityType: string, assets: string[]) {
@@ -220,7 +225,7 @@ export class FvttModuleAssetImporter {
     })
   }
 
-  private async copyExternalAssetsToAdventureModule(): Promise<Result<void>[]> {
+  private async copyExternalAssetsToAdventureModule(): Promise<Result<ImportDetails>[]> {
     return Promise.all(
       Object.values(this.assetMap).map(async (assetInfo) => {
         try {
@@ -231,22 +236,22 @@ export class FvttModuleAssetImporter {
           console.debug(`Copying '${originalPath}' to '${importPath}'`)
           await copyFile(originalPath, importPath)
 
-          return {}
+          return Ok({ from: originalPath, to: importPath })
         } catch (err) {
-          return { error: { message: 'Unexpected error while copying assets', detail: err } }
+          return Fail('Unexpected error while copying assets', err)
         }
       }),
     )
   }
 
-  private async updateAssetReferences(): Promise<Result<void>[]> {
+  private async updateAssetReferences(): Promise<Result<never>[]> {
     return Promise.all(
       Object.entries(this.moduleAssets).flatMap(([pack, files]) =>
         Object.entries(files).map(async ([file, entities]) => {
           const filePath = join(this.tmpPath, pack, file)
           let { error: readError, value: json } = await tryReadTextFile(filePath)
           if (readError) {
-            return { error: readError }
+            return Fail(readError)
           }
 
           console.debug(`Replacing assets in pack ${pack}`)
@@ -260,27 +265,23 @@ export class FvttModuleAssetImporter {
 
           const { error: writeError } = await tryWriteTextFile(filePath, json)
           if (writeError) {
-            return { error: writeError }
+            return Fail(writeError)
           }
 
           const packPath = join(this.newPacksPath, pack)
           const tmpPackPath = join(this.tmpPath, pack)
           await compilePack(tmpPackPath, packPath)
 
-          return {}
+          return Ok()
         }),
       ),
     )
   }
 
-  async destroy() {
-    if (this.state < State.Initialized) {
-      return
+  private async destroyOldTmpDir() {
+    if (this.tmpPath) {
+      await rm(this.tmpPath, { recursive: true, force: true })
     }
-
-    await rm(this.tmpPath, { recursive: true, force: true })
-
-    this.state = State.Destroyed
   }
 
   private getPackPaths(pack: string) {

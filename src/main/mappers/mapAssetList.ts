@@ -1,6 +1,6 @@
 import { unique } from '@main/libs/array/unique'
-import { AdventureModuleAssets } from '@shared/models'
-import { AssetList } from '@shared/models/AssetList'
+import { AdventureModuleAssets } from '@main/models'
+import { AssetList } from '@shared/models'
 
 export const mapAssetList = (assets: AdventureModuleAssets): AssetList => {
   const packAssets = Object.values(assets).flatMap((files) => Object.values(files).map((entities) => entities))

@@ -1,14 +1,35 @@
-import { AssetList } from '@shared/models/AssetList'
-import { Error } from '@shared/models/Error'
+import { AssetList, Error, ImportDetails, ImporterSettings } from '@shared/models'
 import { useCallback, useState } from 'react'
+import AssetMappings from './AssetMappings'
+import ImporterSettingsForm from './ImporterSettingsForm'
+import ImportDetailList from './ImportDetailList'
+
+const defaultSettings: ImporterSettings = { saveToNewModule: false, newModuleName: '' }
+const defaultAssetList: AssetList = null
+const defaultImportDetails: ImportDetails[] = []
+const defaultError: Error = null
+const defaultMessage: string = null
 
 export default function Importer() {
   const [adventureModulePath, setAdventureModulePath] = useState('')
-  const [assetList, setAssetList] = useState<AssetList>(null)
-  const [saveToNewModule, setSaveToNewModule] = useState(false)
-  const [newModuleName, setNewModuleName] = useState('')
-  const [error, setError] = useState<Error>()
-  const [message, setMessage] = useState<string>()
+  const [settings, setSettings] = useState<ImporterSettings>({ ...defaultSettings })
+  const [assetList, setAssetList] = useState<AssetList>(defaultAssetList)
+  const [importDetails, setImportDetails] = useState<ImportDetails[]>(defaultImportDetails)
+  const [error, setError] = useState<Error>(defaultError)
+  const [message, setMessage] = useState<string>(defaultMessage)
+
+  const handleError = (error: Error) => {
+    setError(error)
+    console.error(error, error.details)
+  }
+
+  const resetState = () => {
+    setSettings({ ...defaultSettings })
+    setAssetList(defaultAssetList)
+    setImportDetails(defaultImportDetails)
+    setError(defaultError)
+    setMessage(defaultMessage)
+  }
 
   const selectModuleDirectory = useCallback(async () => {
     const adventureModulePath = await file.selectDirectory()
@@ -17,86 +38,91 @@ export default function Importer() {
       return
     }
 
-    // TODO: This should init - this way, we can do the setup in one step and separate all the other stuff
-
+    resetState()
     setAdventureModulePath(adventureModulePath)
+
+    const { error } = await fvtt.initialize({ adventureModulePath })
+    if (error) {
+      handleError(error)
+      return
+    }
   }, [])
 
+  const updateSettings = useCallback(
+    async (newSettings: ImporterSettings) => {
+      setSettings(newSettings)
+
+      const { error } = fvtt.configureImporter({ settings: newSettings })
+      if (error) {
+        handleError(error)
+      }
+    },
+    [adventureModulePath, settings],
+  )
+
   const getExternalAssets = useCallback(async () => {
-    const { error, assets } = await fvtt.getExternalAssets({ adventureModulePath, newModuleName })
+    const { error, value: assets } = await fvtt.getExternalAssets()
 
     if (error) {
-      setError(error)
-      console.error(error, error.details)
-
+      handleError(error)
       return
     }
 
     setAssetList(assets)
-  }, [adventureModulePath, newModuleName])
+  }, [adventureModulePath, settings])
 
   const importExternalAssets = useCallback(async () => {
-    await fvtt.importExternalAssets()
+    const { error, value: importDetails } = await fvtt.importExternalAssets()
 
     if (error) {
-      setError(error)
-      console.error(error, error.details)
-
+      handleError(error)
       return
     }
 
+    setImportDetails(importDetails)
     setMessage('Import successful')
-  }, [adventureModulePath, newModuleName])
+  }, [adventureModulePath, settings])
+
+  const moduleName =
+    settings.saveToNewModule && settings.newModuleName
+      ? settings.newModuleName
+      : adventureModulePath.split(/[\/\\]/).pop()
 
   return (
     <>
-      <button onClick={selectModuleDirectory}>Select adventure module directory</button>
-      <div>{adventureModulePath}</div>
+      <section>
+        <h3>Pick adventure module directory</h3>
+        <button onClick={selectModuleDirectory}>Select adventure module directory</button>
+        {adventureModulePath && (
+          <div>
+            You picked <code>{adventureModulePath}</code>
+          </div>
+        )}
+      </section>
       {adventureModulePath && (
         <>
-          <label htmlFor='saveToNewModule'>
-            Create a new module instead of overwriting the existing one?
-            <input
-              id='saveToNewModule'
-              type='checkbox'
-              checked={saveToNewModule}
-              onChange={() => setSaveToNewModule(!saveToNewModule)}
-            />
-          </label>
-          {saveToNewModule && <input value={newModuleName} onChange={(e) => setNewModuleName(e.target.value)} />}
-          <button onClick={getExternalAssets}>Show external assets</button>
-        </>
-      )}
-      {assetList && (
-        <>
-          <ul>
-            {assetList.map((entity) => (
-              <li key={entity.entity}>
-                {entity.entity}
-                <ul>
-                  {entity.assets.map((asset) => (
-                    <li key={asset.originalPath}>
-                      {asset.originalPath} ⇒ {asset.internalPath}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-          <button onClick={importExternalAssets}>Import assets</button>
+          <section>
+            <h3>Settings</h3>
+            <ImporterSettingsForm settings={settings} onChange={updateSettings} />
+          </section>
+          <section>
+            <h3>Show current external assets</h3>
+            <button onClick={getExternalAssets}>Show external assets</button>
+            {assetList && <AssetMappings assets={assetList} />}
+          </section>
+          <section>
+            <h3>
+              Import external assets into module <code>{moduleName}</code>
+            </h3>
+            <button onClick={importExternalAssets}>Import assets</button>
+            {!!importDetails.length && <ImportDetailList details={importDetails} />}
+          </section>
         </>
       )}
       {message && <div>{message}</div>}
       {error && <div>{error.message}</div>}
-
-      {/* TODO: Progress bar or similar */}
-      {/* TODO: Init session when selecting module - temp dir name will be ID */}
-      {/* TODO: Flexibly change settings */}
-      {/* TODO: Inspection & import should be done independently of each other */}
-      {/* TODO: Inspection should be in a toggleable tab */}
-      {/* TODO: Auto-update inspection after import */}
-      {/* TODO: Success/error messages as toast */}
-      {/* TODO: Styling - MUI or sth? */}
+      {/* TODO: Success/error messages as toast or notification */}
+      {/* TODO: Use some UI lib, create stepper/wizard? */}
     </>
   )
 }

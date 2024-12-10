@@ -1,12 +1,11 @@
-import { Result } from '@shared/models/Result'
+import { Fail, Ok, Result } from '@shared/models'
 import { readFile } from 'node:fs/promises'
 
 export const tryReadTextFile = async (path: string): Promise<Result<string>> => {
   try {
     const buffer = await readFile(path)
-    const text = buffer.toString('utf-8')
-    return { value: text }
+    return Ok(buffer.toString('utf-8'))
   } catch (err) {
-    return { error: { message: `Unable to read file "${path}"`, details: err } }
+    return Fail(`Unable to read file "${path}"`, err)
   }
 }

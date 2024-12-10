@@ -1,15 +1,7 @@
-import { Result, AssetListResult } from './shared/models'
-
-export type File = {
-  selectDirectory: () => Promise<string | null>
-}
-
-export type FVTT = {
-  getExternalAssets: (options: { adventureModulePath: string; newModuleName: string }) => Promise<AssetListResult>
-  importExternalAssets: () => Promise<Result<void>>
-}
+import { FileApi, FvttApi } from './preload'
+import { PreloadSignatures } from './shared/models'
 
 declare global {
-  const file: File
-  const fvtt: FVTT
+  const file: FileApi
+  const fvtt: FvttApi
 }
