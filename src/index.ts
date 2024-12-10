@@ -6,12 +6,12 @@ import { registerIpcHandlers } from './main/registerIpcHandlers'
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string
 
-const devMode = process.env.WEBPACK_SERVE === 'true'
-
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit()
 }
+
+const devMode = process.env.WEBPACK_SERVE === 'true'
 
 const createWindow = (): void => {
   // Create the browser window.
