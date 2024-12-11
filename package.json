@@ -1,8 +1,8 @@
 {
   "name": "fvtt-adventure-module-asset-importer",
-  "productName": "fvtt-adventure-module-asset-importer",
+  "productName": "Adventure Module Asset Importer for Foundry VTT",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Simple tool that imports any assets (such as images, audio files, etc.) from other modules into your adventure module.",
   "main": ".webpack/main",
   "engines": {
     "node": "20.15.x"
