@@ -3,7 +3,7 @@
 This tool for [Foundry VTT](https://foundryvtt.com/) (no affiliation) allows you to import any assets (such as images, audio files, etc.) from other modules into your adventure module.\
 This has been built in a hurry and is by no means meant for the public.
 
-Note that while I provide releases for multiple operating systems, I've only tested on Windows so far.
+Note that while it's possible to releases for multiple operating systems, I'm only providing the app (installation or portable) for Windows so far.
 
 It's built using [Electron](https://www.electronjs.org/) and leverages the official Foundry VTT CLI to edit the adventure module.
 
