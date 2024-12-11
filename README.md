@@ -5,7 +5,7 @@ This has been built in a hurry and is by no means meant for the public.
 
 Note that while it's possible to releases for multiple operating systems, I'm only providing the app (installation or portable) for Windows so far.
 
-It's built using [Electron](https://www.electronjs.org/) and leverages the official Foundry VTT CLI to edit the adventure module.
+It's built using [Electron](https://www.electronjs.org/) and [Electron Forge](https://www.electronforge.io/) and leverages the official Foundry VTT CLI to edit the adventure module.
 
 ## Usage
 
