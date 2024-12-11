@@ -7,11 +7,13 @@
   "engines": {
     "node": "20.15.x"
   },
+  "repository": "github:jagoe/fvtt-adventure-module-asset-importer",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make:linux": "electron-forge make --platform=linux",
     "make:windows": "electron-forge make --platform=win32",
+    "make:windows:portable": "electron-forge make --platform=win32 --targets portable",
     "make:darwin": "electron-forge make --platform=darwin",
     "make:docker": "docker run --rm --env-file <(env | grep -iE 'DEBUG|NODE_|ELECTRON_|YARN_|NPM_|CI|CIRCLE|TRAVIS_TAG|TRAVIS|TRAVIS_REPO_|TRAVIS_BUILD_|TRAVIS_BRANCH|TRAVIS_PULL_REQUEST_|APPVEYOR_|CSC_|GH_|GITHUB_|BT_|AWS_|STRIP|BUILD_') --env ELECTRON_CACHE=\"/root/.cache/electron\" --env ELECTRON_BUILDER_CACHE=\"/root/.cache/electron-builder\" -v ${PWD}:/project -v ${PWD##*/}-node-modules:/project/node_modules -v ~/.cache/electron:/root/.cache/electron -v ~/.cache/electron-builder:/root/.cache/electron-builder electronuserland/builder:wine -- yarn && yarn dist",
     "publish": "electron-forge publish",
@@ -26,7 +28,9 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.6.0",
     "@electron-forge/plugin-fuses": "^7.6.0",
     "@electron-forge/plugin-webpack": "^7.6.0",
+    "@electron-forge/publisher-github": "^7.6.0",
     "@electron/fuses": "^1.8.0",
+    "@rabbitholesyndrome/electron-forge-maker-portable": "^0.2.0",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
@@ -56,6 +60,7 @@
     "classic-level": "^2.0.0",
     "electron-squirrel-startup": "^1.0.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "update-electron-app": "^3.0.0"
   }
 }

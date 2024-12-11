@@ -3,6 +3,8 @@ import { MakerSquirrel } from '@electron-forge/maker-squirrel'
 import { MakerZIP } from '@electron-forge/maker-zip'
 import { MakerDeb } from '@electron-forge/maker-deb'
 import { MakerRpm } from '@electron-forge/maker-rpm'
+import MakerPortable from '@rabbitholesyndrome/electron-forge-maker-portable'
+import { PublisherGithub } from '@electron-forge/publisher-github'
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives'
 import { WebpackPlugin } from '@electron-forge/plugin-webpack'
 import { FusesPlugin } from '@electron-forge/plugin-fuses'
@@ -16,7 +18,25 @@ const config: ForgeConfig = {
     asar: true,
   },
   rebuildConfig: {},
-  makers: [new MakerSquirrel({}), new MakerZIP({}, ['darwin']), new MakerRpm({}), new MakerDeb({})],
+  makers: [
+    new MakerSquirrel({}),
+    new MakerPortable({
+      artifactName: '${productName} ${version} Portable.exe',
+    }),
+    new MakerZIP({}, ['darwin']),
+    new MakerRpm({}),
+    new MakerDeb({}),
+  ],
+  publishers: [
+    new PublisherGithub({
+      repository: {
+        owner: 'jagoe',
+        name: 'fvtt-adventure-module-asset-importer',
+      },
+      generateReleaseNotes: true,
+      force: true,
+    }),
+  ],
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
